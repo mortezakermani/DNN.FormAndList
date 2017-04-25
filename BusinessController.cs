@@ -18,7 +18,7 @@ using Globals = DotNetNuke.Common.Globals;
 
 namespace DotNetNuke.Modules.UserDefinedTable
 {
-    public class BusinessController : ISearchable, IPortable, IPortable2
+    public class BusinessController : ModuleSearchBase, IPortable, IPortable2
     {
         public enum SettingsType
         {
@@ -110,12 +110,15 @@ namespace DotNetNuke.Modules.UserDefinedTable
 
         /// -----------------------------------------------------------------------------
         /// <summary>
-        ///   Implements the search interface for DotNetNuke
+        /// modified for DNN 7.2 and later search interface by Morteza Kermani
+        /// Implements the search interface for DotNetNuke
         /// </summary>
         /// -----------------------------------------------------------------------------
-        public SearchItemInfoCollection GetSearchItems(ModuleInfo modInfo)
+        /// 
+
+        public override IList<SearchDocument> GetModifiedSearchDocuments(ModuleInfo modInfo, DateTime beginDateUtc)
         {
-            var searchItemCollection = new SearchItemInfoCollection();
+            var searchDocuments = new List<SearchDocument>();
             var udtController = new UserDefinedTableController(modInfo);
 
             try
@@ -123,51 +126,58 @@ namespace DotNetNuke.Modules.UserDefinedTable
                 var dsUserDefinedRows = udtController.GetDataSet(withPreRenderedValues: false);
 
                 //Get names of ChangedBy and ChangedAt columns
-                var colnameChangedBy = udtController.ColumnNameByDataType(dsUserDefinedRows,
-                                                                          DataTypeNames.UDT_DataType_ChangedBy);
-                var colnameChangedAt = udtController.ColumnNameByDataType(dsUserDefinedRows,
-                                                                          DataTypeNames.UDT_DataType_ChangedAt);
+                var colnameChangedBy = udtController.ColumnNameByDataType(dsUserDefinedRows, DataTypeNames.UDT_DataType_ChangedBy);
+                var colnameChangedAt = udtController.ColumnNameByDataType(dsUserDefinedRows, DataTypeNames.UDT_DataType_ChangedAt);
 
-                var moduleController = new ModuleController();
-                var settings = moduleController.GetModuleSettings(modInfo.ModuleID);
-                var includeInSearch = !(settings[SettingName.ExcludeFromSearch].AsBoolean());
+                ModuleInfo mi = new ModuleInfo();
+                var includeInSearch = !(mi.ModuleSettings[SettingName.ExcludeFromSearch].AsBoolean());
 
                 if (includeInSearch)
                 {
                     foreach (DataRow row in dsUserDefinedRows.Tables[DataSetTableName.Data].Rows)
                     {
                         var changedDate = DateTime.Today;
-                        var changedByUserId = 0;
+                        var changedByUserId = 0;                                                
 
-                        if (colnameChangedAt != string.Empty && ! Information.IsDBNull(row[colnameChangedAt]))
+                        if (colnameChangedAt != string.Empty && !Information.IsDBNull(row[colnameChangedAt]))
                         {
                             changedDate = Convert.ToDateTime(row[colnameChangedAt]);
                         }
-                        if (colnameChangedBy != string.Empty && ! Information.IsDBNull(row[colnameChangedBy]))
+                        if (colnameChangedBy != string.Empty && !Information.IsDBNull(row[colnameChangedBy]))
                         {
                             changedByUserId = ModuleSecurity.UserId(row[colnameChangedBy].ToString(), modInfo.PortalID);
                         }
 
                         var desc = string.Empty;
+                        bool Searchable = false;
+
                         foreach (DataRow col in dsUserDefinedRows.Tables[DataSetTableName.Fields].Rows)
                         {
                             var fieldType = col[FieldsTableColumn.Type].ToString();
                             var fieldTitle = col[FieldsTableColumn.Title].ToString();
                             var visible = Convert.ToBoolean(col[FieldsTableColumn.Visible]);
-                            if (visible &&
-                                (fieldType.StartsWith("Text") || fieldType == DataTypeNames.UDT_DataType_String))
+                            Searchable = Convert.ToBoolean(col[FieldsTableColumn.Searchable]);
+                            if (visible && Searchable && (fieldType.StartsWith("Text") || fieldType == DataTypeNames.UDT_DataType_String))
                             {
-                                desc += string.Format("{0} &bull; ", Convert.ToString(row[fieldTitle]));
+                                desc += string.Format("{0} ", Convert.ToString(row[fieldTitle]));
                             }
                         }
-                        if (desc.EndsWith("<br/>"))
+
+                        var strContent = HtmlUtils.Clean(desc, false);
+                        var description = HtmlUtils.Shorten(strContent, 100, "...");
+
+                        var searchDoc = new SearchDocument
                         {
-                            desc = desc.Substring(0, Convert.ToInt32(desc.Length - 5));
-                        }
-                        var searchItem = new SearchItemInfo(modInfo.ModuleTitle, desc, changedByUserId, changedDate,
-                                                            modInfo.ModuleID, row[DataTableColumn.RowId].ToString(),
-                                                            desc);
-                        searchItemCollection.Add(searchItem);
+                            UniqueKey = row[DataTableColumn.RowId].ToString(),
+                            PortalId = modInfo.PortalID,
+                            Title = modInfo.ModuleTitle,
+                            ModuleId = modInfo.ModuleID,
+                            TabId = modInfo.TabID,
+                            Description = description,
+                            Body = strContent,
+                            ModifiedTimeUtc = changedDate
+                        };
+                        searchDocuments.Add(searchDoc);
                     }
                 }
             }
@@ -175,8 +185,7 @@ namespace DotNetNuke.Modules.UserDefinedTable
             {
                 Exceptions.LogException(ex);
             }
-
-            return searchItemCollection;
+            return searchDocuments;
         }
 
 
