@@ -167,6 +167,7 @@ namespace DotNetNuke.Modules.UserDefinedTable
                             UniqueKey = row[DataTableColumn.RowId].ToString(),
                             PortalId = modInfo.PortalID,
                             Title = modInfo.ModuleTitle,
+                            QueryString = "id=" + row[DataTableColumn.RowId].ToString(),
                             Description = desc,
                             Body = desc,
                             ModifiedTimeUtc = changedDate
