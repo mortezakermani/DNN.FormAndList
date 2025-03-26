@@ -87,94 +87,105 @@ namespace DotNetNuke.Modules.UserDefinedTable
             {
                 var searchString = string.Empty;
 
-                if (TxtSearch.Text == string.Empty)
+                if (TxtSearch.Text != string.Empty)
                 {
-                    return string.Empty;
-                }
-                var dataSet = _parent.DataSet;
-                foreach (DataRow row in dataSet.Tables[DataSetTableName.Fields].Rows)
-                {
-                    if (TxtSearch.Visible && Convert.ToBoolean(row[FieldsTableColumn.Searchable]))
+                    var dataSet = _parent.DataSet;
+                    foreach (DataRow row in dataSet.Tables[DataSetTableName.Fields].Rows)
                     {
-                        var fieldTitle = row[FieldsTableColumn.Title].ToString();
-                        if (DrpSearchableColumns.SelectedValue == "allcolumns" ||
-                            DrpSearchableColumns.SelectedValue == fieldTitle)
+                        if (TxtSearch.Visible && Convert.ToBoolean(row[FieldsTableColumn.Searchable]))
                         {
-                            //add to search expression:
-                            if (searchString != string.Empty)
+                            var fieldTitle = row[FieldsTableColumn.Title].ToString();
+                            if (DrpSearchableColumns.SelectedValue == "allcolumns" ||
+                                DrpSearchableColumns.SelectedValue == fieldTitle)
                             {
-                                searchString += " OR ";
-                            }
+                                //add to search expression:
+                                if (searchString != string.Empty)
+                                {
+                                    searchString += " OR ";
+                                }
 
-                            if (_parent.Settings.UrlSearch  &&
-                                dataSet.Tables[DataSetTableName.Data].Columns.Contains(fieldTitle +
-                                                                                       DataTableColumn.Appendix_Url))
-                            {
-                                fieldTitle += DataTableColumn.Appendix_Url;
-                            }
-                            else if (
-                                dataSet.Tables[DataSetTableName.Data].Columns.Contains(fieldTitle +
-                                                                                       DataTableColumn.
-                                                                                           Appendix_Caption))
-                            {
-                                fieldTitle += DataTableColumn.Appendix_Caption;
-                            }
+                                if (_parent.Settings.UrlSearch &&
+                                    dataSet.Tables[DataSetTableName.Data].Columns.Contains(fieldTitle +
+                                                                                           DataTableColumn.Appendix_Url))
+                                {
+                                    fieldTitle += DataTableColumn.Appendix_Url;
+                                }
+                                else if (
+                                    dataSet.Tables[DataSetTableName.Data].Columns.Contains(fieldTitle +
+                                                                                           DataTableColumn.
+                                                                                               Appendix_Caption))
+                                {
+                                    fieldTitle += DataTableColumn.Appendix_Caption;
+                                }
 
-                            if (dataSet.Tables[DataSetTableName.Data].Columns[fieldTitle].DataType ==
-                                typeof (string))
-                            {
-                                searchString += string.Format("([{0}] Like \'[UDT:Search]\')", fieldTitle);
-                            }
-                            else
-                            {
-                                searchString +=
-                                    string.Format("(Convert([{0}], \'System.String\') Like \'[UDT:Search]\')",
-                                                  fieldTitle);
+                                if (dataSet.Tables[DataSetTableName.Data].Columns[fieldTitle].DataType ==
+                                    typeof(string))
+                                {
+                                    searchString += string.Format("([{0}] Like \'[UDT:Search]\')", fieldTitle);
+                                }
+                                else
+                                {
+                                    searchString +=
+                                        string.Format("(Convert([{0}], \'System.String\') Like \'[UDT:Search]\')",
+                                                      fieldTitle);
+                                }
                             }
                         }
                     }
-                }
-                var searchpattern = TxtSearch.Text;
-                if (DrpSearchMode.Visible)
-                {
-                    switch (DrpSearchMode.SelectedValue)
+                    var searchpattern = TxtSearch.Text;
+                    if (DrpSearchMode.Visible)
                     {
-                        case "contain":
-                            searchpattern = string.Format("*{0}*", searchpattern);
-                            break;
-                        case "startwith":
-                            searchpattern = string.Format("{0}*", searchpattern);
-                            break;
-                        case "endwith":
-                            searchpattern = string.Format("*{0}", searchpattern);
-                            break;
-                        case "equal":
-                            break;
-                    }
-                }
-                else
-                {
-                    if (searchpattern.StartsWith("|") && searchpattern.EndsWith("|"))
-                    {
-                        searchpattern = searchpattern.Substring(1, Convert.ToInt32(searchpattern.Length - 2));
-                    }
-                    else if (searchpattern.StartsWith("|"))
-                    {
-                        searchpattern = string.Format("{0}*", searchpattern.Substring(1));
-                    }
-                    else if (searchpattern.EndsWith("|"))
-                    {
-                        searchpattern = string.Format("*{0}",
-                                                      searchpattern.Substring(0,
-                                                                              Convert.ToInt32(searchpattern.Length -
-                                                                                              1)));
+                        switch (DrpSearchMode.SelectedValue)
+                        {
+                            case "contain":
+                                searchpattern = string.Format("*{0}*", searchpattern);
+                                break;
+                            case "startwith":
+                                searchpattern = string.Format("{0}*", searchpattern);
+                                break;
+                            case "endwith":
+                                searchpattern = string.Format("*{0}", searchpattern);
+                                break;
+                            case "equal":
+                                break;
+                        }
                     }
                     else
                     {
-                        searchpattern = string.Format("*{0}*", searchpattern);
+                        if (searchpattern.StartsWith("|") && searchpattern.EndsWith("|"))
+                        {
+                            searchpattern = searchpattern.Substring(1, Convert.ToInt32(searchpattern.Length - 2));
+                        }
+                        else if (searchpattern.StartsWith("|"))
+                        {
+                            searchpattern = string.Format("{0}*", searchpattern.Substring(1));
+                        }
+                        else if (searchpattern.EndsWith("|"))
+                        {
+                            searchpattern = string.Format("*{0}",
+                                                          searchpattern.Substring(0,
+                                                                                  Convert.ToInt32(searchpattern.Length -
+                                                                                                  1)));
+                        }
+                        else
+                        {
+                            searchpattern = string.Format("*{0}*", searchpattern);
+                        }
                     }
+
+                    searchString = searchString.Replace("[UDT:Search]", EscapeSearchInput(searchpattern));
                 }
-                return searchString.Replace("[UDT:Search]", EscapeSearchInput(searchpattern));
+
+                if (!string.IsNullOrEmpty(HttpContext.Current.Request.QueryString["id"])) {
+                    int id = 0;
+                    int.TryParse(HttpContext.Current.Request.QueryString["id"], out id);
+                    if (id > 0 && !string.IsNullOrEmpty(searchString))
+                        searchString = $"({searchString}) AND (UserDefinedRowId = {id})";
+                    else if (id > 0)
+                        searchString = $"(UserDefinedRowId = {id})";
+                }
+
+                return searchString;
             }
 
             static string EscapeSearchInput(string input)
@@ -474,6 +485,21 @@ namespace DotNetNuke.Modules.UserDefinedTable
                 return  ViewState["SortOrder"].AsString();
             }
             set { ViewState["SortOrder"] = value; }
+        }
+
+        bool CoreSearching
+        {
+            get
+            {
+                if (!string.IsNullOrEmpty(HttpContext.Current.Request.QueryString["id"]))
+                {
+                    int id = 0;
+                    int.TryParse(HttpContext.Current.Request.QueryString["id"], out id);
+                    return (id > 0);
+                }
+                else
+                    return false;
+            }
         }
 
         #endregion
